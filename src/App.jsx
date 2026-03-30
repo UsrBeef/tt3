@@ -5,17 +5,25 @@ const TOURNAMENT_INFO = {
   name: "Spring Board Cup 2026",
   datePlace: "12 апреля 2026 • Киев",
   format: "Рапид",
-  prizes: "1 место — кубок, медали, призы от партнеров",
+  prizes: "Кубок, медали, призы от партнеров",
 };
+
+const REGISTER_URL = "https://YOUR-N8N-DOMAIN/webhook/register-player";
+const PROFILE_URL = "https://YOUR-N8N-DOMAIN/webhook/get-player-profile";
+
+function withTimeout(ms = 15000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ms);
+  return { controller, timeoutId };
+}
 
 export default function App() {
   const [tgUser, setTgUser] = useState(null);
-  const [startParam, setStartParam] = useState("");
-  const [status, setStatus] = useState("Готово");
-  const [loading, setLoading] = useState(false);
-
   const [screen, setScreen] = useState("tournament");
-  // tournament | register | profile
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [debugInfo, setDebugInfo] = useState("");
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -33,7 +41,6 @@ export default function App() {
       tg.expand?.();
 
       setTgUser(tg.initDataUnsafe?.user ?? null);
-      setStartParam(tg.initDataUnsafe?.start_param ?? "");
 
       const tp = tg.themeParams ?? {};
       if (tp.bg_color) {
@@ -48,8 +55,6 @@ export default function App() {
       if (tp.button_text_color) {
         document.documentElement.style.setProperty("--tg-button-text", tp.button_text_color);
       }
-    } else {
-      setStatus("Тестовый режим вне Telegram");
     }
   }, []);
 
@@ -66,87 +71,140 @@ export default function App() {
     }));
   }
 
-  function openRegisterForm() {
-    setScreen("register");
-    setStatus("Заполните форму регистрации");
+  function appendDebug(title, value) {
+    const text =
+      typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    const block = `\n[${title}]\n${text}\n`;
+    setDebugInfo((prev) => prev + block);
+    console.log(title, value);
   }
 
   async function submitRegistration() {
     if (!formData.full_name.trim() || !formData.rating.trim() || !formData.club.trim()) {
-      setStatus("Заполните все поля");
+      setMessage("Заполните все поля");
       return;
     }
 
     setLoading(true);
-    setStatus("Отправка регистрации...");
+    setMessage("");
+    setDebugInfo("");
+
+    const payload = {
+      telegram_user_id: tgUser?.id ?? null,
+      telegram_username: tgUser?.username ?? null,
+      telegram_name: telegramName,
+      initData: window.Telegram?.WebApp?.initData ?? "",
+      full_name: formData.full_name,
+      rating: formData.rating,
+      club: formData.club,
+    };
+
+    appendDebug("REGISTER_URL", REGISTER_URL);
+    appendDebug("REGISTER_PAYLOAD", payload);
+
+    const { controller, timeoutId } = withTimeout(15000);
 
     try {
-      const response = await fetch("https://n8lcltstat.party/webhook-test/register-player", {
+      const response = await fetch(REGISTER_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          telegram_user_id: tgUser?.id ?? null,
-          telegram_username: tgUser?.username ?? null,
-          telegram_name: telegramName,
-          start_param: startParam,
-          initData: window.Telegram?.WebApp?.initData ?? "",
-          full_name: formData.full_name,
-          rating: formData.rating,
-          club: formData.club,
-        }),
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
-//      const data = await response.json();
-      console.log("HTTP status:", response.status);
-      console.log("Content-Type:", response.headers.get("content-type"));
-//      if (data.ok) {
-//        setStatus(data.message || "Регистрация успешна");
-//        await loadPlayerProfile();
-//      } else {
-//        setStatus(data.message || "Ошибка регистрации");
-//      }
-//    } catch (error) {
-//      console.error(error);
-//      setStatus("Ошибка сети при регистрации");
-//    } finally {
+      clearTimeout(timeoutId);
+
+      appendDebug("REGISTER_HTTP_STATUS", response.status);
+      appendDebug("REGISTER_CONTENT_TYPE", response.headers.get("content-type"));
+
       const rawText = await response.text();
-      console.log("RAW RESPONSE:", rawText);
+      appendDebug("REGISTER_RAW_RESPONSE", rawText);
+
       let data;
       try {
-         data = JSON.parse(rawText);
-        } catch (e) {
-          throw new Error("Ответ n8n не является JSON: " + rawText);
-        }
-        if (data.ok) {
-          setIsRegistered(true);
-          setMessage(data.message || "Регистрация сохранена");
-        } else {
-          setMessage(data.message || "Ошибка регистрации");
-        }
-      } finally {
+        data = JSON.parse(rawText);
+      } catch (parseError) {
+        throw new Error(`Ответ backend не JSON. Raw response: ${rawText}`);
+      }
+
+      appendDebug("REGISTER_PARSED_JSON", data);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${data.message || rawText}`);
+      }
+
+      if (data.ok) {
+        setIsRegistered(true);
+        setMessage(data.message || "Регистрация сохранена");
+      } else {
+        setMessage(data.message || "Ошибка регистрации");
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error.name === "AbortError") {
+        setMessage("Таймаут запроса: backend слишком долго отвечает");
+        appendDebug("REGISTER_ERROR", "AbortError / timeout");
+      } else {
+        setMessage(`Ошибка сети при регистрации: ${error.message}`);
+        appendDebug("REGISTER_ERROR", {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        });
+      }
+    } finally {
       setLoading(false);
     }
   }
 
   async function loadPlayerProfile() {
     setLoading(true);
-    setStatus("Загрузка профиля...");
+    setMessage("");
+    setDebugInfo("");
+
+    const payload = {
+      telegram_user_id: tgUser?.id ?? null,
+      initData: window.Telegram?.WebApp?.initData ?? "",
+    };
+
+    appendDebug("PROFILE_URL", PROFILE_URL);
+    appendDebug("PROFILE_PAYLOAD", payload);
+
+    const { controller, timeoutId } = withTimeout(15000);
 
     try {
-      const response = await fetch("https://n8lcltstat.party/webhook-test/get-player-profile", {
+      const response = await fetch(PROFILE_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          telegram_user_id: tgUser?.id ?? null,
-          initData: window.Telegram?.WebApp?.initData ?? "",
-        }),
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
-      const data = await response.json();
+      clearTimeout(timeoutId);
+
+      appendDebug("PROFILE_HTTP_STATUS", response.status);
+      appendDebug("PROFILE_CONTENT_TYPE", response.headers.get("content-type"));
+
+      const rawText = await response.text();
+      appendDebug("PROFILE_RAW_RESPONSE", rawText);
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseError) {
+        throw new Error(`Ответ backend не JSON. Raw response: ${rawText}`);
+      }
+
+      appendDebug("PROFILE_PARSED_JSON", data);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${data.message || rawText}`);
+      }
 
       if (data.ok) {
         setProfile({
@@ -157,13 +215,23 @@ export default function App() {
           games: data.games || [],
         });
         setScreen("profile");
-        setStatus("Профиль загружен");
       } else {
-        setStatus(data.message || "Игрок не найден");
+        setMessage(data.message || "Профиль не найден");
       }
     } catch (error) {
-      console.error(error);
-      setStatus("Ошибка загрузки профиля");
+      clearTimeout(timeoutId);
+
+      if (error.name === "AbortError") {
+        setMessage("Таймаут запроса при загрузке профиля");
+        appendDebug("PROFILE_ERROR", "AbortError / timeout");
+      } else {
+        setMessage(`Ошибка загрузки профиля: ${error.message}`);
+        appendDebug("PROFILE_ERROR", {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -181,12 +249,15 @@ export default function App() {
         </div>
 
         <div className="actions">
-          <button className="primary" onClick={openRegisterForm} disabled={loading}>
+          <button className="primary" onClick={() => setScreen("register")} disabled={loading}>
             Участвовать
           </button>
-          <button className="secondary" onClick={loadPlayerProfile} disabled={loading}>
-            Мой профиль
-          </button>
+
+          {(isRegistered || profile) && (
+            <button className="secondary" onClick={loadPlayerProfile} disabled={loading}>
+              Профиль игрока
+            </button>
+          )}
         </div>
       </>
     );
@@ -228,8 +299,15 @@ export default function App() {
 
         <div className="actions">
           <button className="primary" onClick={submitRegistration} disabled={loading}>
-            Отправить регистрацию
+            {loading ? "Отправка..." : "Отправить регистрацию"}
           </button>
+
+          {isRegistered && (
+            <button className="secondary" onClick={loadPlayerProfile} disabled={loading}>
+              Профиль игрока
+            </button>
+          )}
+
           <button className="secondary" onClick={() => setScreen("tournament")} disabled={loading}>
             Назад
           </button>
@@ -277,9 +355,7 @@ export default function App() {
     <div className="page">
       <div className="card">
         <div className="header">
-          <div className="avatar">
-            {(telegramName[0] || "G").toUpperCase()}
-          </div>
+          <div className="avatar">{(telegramName[0] || "G").toUpperCase()}</div>
           <div>
             <div className="label">Tournament Mini App</div>
             <h1>{telegramName}</h1>
@@ -289,15 +365,28 @@ export default function App() {
           </div>
         </div>
 
-        <div className="panel">
-          <div><b>Статус:</b> {status}</div>
-          <div><b>Telegram ID:</b> {tgUser?.id ?? "нет"}</div>
-          <div><b>Параметр запуска:</b> {startParam || "не передан"}</div>
-        </div>
+        {message && <div className="panel">{message}</div>}
 
         {screen === "tournament" && renderTournamentScreen()}
         {screen === "register" && renderRegisterScreen()}
         {screen === "profile" && renderProfileScreen()}
+
+        {debugInfo && (
+          <div className="panel" style={{ marginTop: "14px" }}>
+            <div className="sectionTitle">Отладка</div>
+            <pre
+              style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontSize: "12px",
+                lineHeight: "1.45",
+                margin: 0,
+              }}
+            >
+              {debugInfo}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
