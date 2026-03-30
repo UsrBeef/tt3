@@ -131,6 +131,37 @@ button:disabled {
   color: var(--muted);
 }
 
+.fieldLabel {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: #1a2631;
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  outline: none;
+}
+
+.input::placeholder {
+  color: #7c93a4;
+}
+
+.gameCard {
+  background: #1a2631;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  margin-top: 10px;
+}
+
 ul {
   margin: 0;
   padding-left: 18px;
