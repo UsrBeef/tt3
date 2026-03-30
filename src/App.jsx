@@ -81,7 +81,7 @@ export default function App() {
     setStatus("Отправка регистрации...");
 
     try {
-      const response = await fetch("https://n8lcltstat.party/webhook/register-player", {
+      const response = await fetch("https://n8lcltstat.party/webhook-test/register-player", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -119,7 +119,7 @@ export default function App() {
     setStatus("Загрузка профиля...");
 
     try {
-      const response = await fetch("https://YOUR-N8N-DOMAIN/webhook/get-player-profile", {
+      const response = await fetch("https://n8lcltstat.party/webhook-test/get-player-profile", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
