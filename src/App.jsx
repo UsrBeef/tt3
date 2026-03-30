@@ -9,7 +9,7 @@ const TOURNAMENT_INFO = {
 };
 
 const REGISTER_URL = "https://n8lcltstat.party/webhook-test/register-player";
-const PROFILE_URL = "https://n8lcltstat.party/webhook/get-player-profile";
+const PROFILE_URL = "https://n8lcltstat.party/webhook-test/register-player";
 
 function withTimeout(ms = 15000) {
   const controller = new AbortController();
@@ -23,7 +23,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [isRegistered, setIsRegistered] = useState(false);
-  const [debugInfo, setDebugInfo] = useState("");
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -71,14 +70,6 @@ export default function App() {
     }));
   }
 
-  function appendDebug(title, value) {
-    const text =
-      typeof value === "string" ? value : JSON.stringify(value, null, 2);
-    const block = `\n[${title}]\n${text}\n`;
-    setDebugInfo((prev) => prev + block);
-    console.log(title, value);
-  }
-
   async function submitRegistration() {
     if (!formData.full_name.trim() || !formData.rating.trim() || !formData.club.trim()) {
       setMessage("Заполните все поля");
@@ -87,7 +78,6 @@ export default function App() {
 
     setLoading(true);
     setMessage("");
-    setDebugInfo("");
 
     const payload = {
       telegram_user_id: tgUser?.id ?? null,
@@ -98,9 +88,6 @@ export default function App() {
       rating: formData.rating,
       club: formData.club,
     };
-
-    appendDebug("REGISTER_URL", REGISTER_URL);
-    appendDebug("REGISTER_PAYLOAD", payload);
 
     const { controller, timeoutId } = withTimeout(15000);
 
@@ -116,23 +103,17 @@ export default function App() {
 
       clearTimeout(timeoutId);
 
-      appendDebug("REGISTER_HTTP_STATUS", response.status);
-      appendDebug("REGISTER_CONTENT_TYPE", response.headers.get("content-type"));
-
       const rawText = await response.text();
-      appendDebug("REGISTER_RAW_RESPONSE", rawText);
 
       let data;
       try {
         data = JSON.parse(rawText);
-      } catch (parseError) {
-        throw new Error(`Ответ backend не JSON. Raw response: ${rawText}`);
+      } catch {
+        throw new Error("Ответ backend не является JSON");
       }
 
-      appendDebug("REGISTER_PARSED_JSON", data);
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${data.message || rawText}`);
+        throw new Error(data.message || `HTTP ${response.status}`);
       }
 
       if (data.ok) {
@@ -146,14 +127,8 @@ export default function App() {
 
       if (error.name === "AbortError") {
         setMessage("Таймаут запроса: backend слишком долго отвечает");
-        appendDebug("REGISTER_ERROR", "AbortError / timeout");
       } else {
         setMessage(`Ошибка сети при регистрации: ${error.message}`);
-        appendDebug("REGISTER_ERROR", {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        });
       }
     } finally {
       setLoading(false);
@@ -163,15 +138,11 @@ export default function App() {
   async function loadPlayerProfile() {
     setLoading(true);
     setMessage("");
-    setDebugInfo("");
 
     const payload = {
       telegram_user_id: tgUser?.id ?? null,
       initData: window.Telegram?.WebApp?.initData ?? "",
     };
-
-    appendDebug("PROFILE_URL", PROFILE_URL);
-    appendDebug("PROFILE_PAYLOAD", payload);
 
     const { controller, timeoutId } = withTimeout(15000);
 
@@ -187,23 +158,17 @@ export default function App() {
 
       clearTimeout(timeoutId);
 
-      appendDebug("PROFILE_HTTP_STATUS", response.status);
-      appendDebug("PROFILE_CONTENT_TYPE", response.headers.get("content-type"));
-
       const rawText = await response.text();
-      appendDebug("PROFILE_RAW_RESPONSE", rawText);
 
       let data;
       try {
         data = JSON.parse(rawText);
-      } catch (parseError) {
-        throw new Error(`Ответ backend не JSON. Raw response: ${rawText}`);
+      } catch {
+        throw new Error("Ответ backend не является JSON");
       }
 
-      appendDebug("PROFILE_PARSED_JSON", data);
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${data.message || rawText}`);
+        throw new Error(data.message || `HTTP ${response.status}`);
       }
 
       if (data.ok) {
@@ -223,14 +188,8 @@ export default function App() {
 
       if (error.name === "AbortError") {
         setMessage("Таймаут запроса при загрузке профиля");
-        appendDebug("PROFILE_ERROR", "AbortError / timeout");
       } else {
         setMessage(`Ошибка загрузки профиля: ${error.message}`);
-        appendDebug("PROFILE_ERROR", {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        });
       }
     } finally {
       setLoading(false);
@@ -370,23 +329,6 @@ export default function App() {
         {screen === "tournament" && renderTournamentScreen()}
         {screen === "register" && renderRegisterScreen()}
         {screen === "profile" && renderProfileScreen()}
-
-        {debugInfo && (
-          <div className="panel" style={{ marginTop: "14px" }}>
-            <div className="sectionTitle">Отладка</div>
-            <pre
-              style={{
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontSize: "12px",
-                lineHeight: "1.45",
-                margin: 0,
-              }}
-            >
-              {debugInfo}
-            </pre>
-          </div>
-        )}
       </div>
     </div>
   );
