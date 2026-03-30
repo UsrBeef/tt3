@@ -98,18 +98,34 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
-
-      if (data.ok) {
-        setStatus(data.message || "Регистрация успешна");
-        await loadPlayerProfile();
-      } else {
-        setStatus(data.message || "Ошибка регистрации");
-      }
-    } catch (error) {
-      console.error(error);
-      setStatus("Ошибка сети при регистрации");
-    } finally {
+//      const data = await response.json();
+      console.log("HTTP status:", response.status);
+      console.log("Content-Type:", response.headers.get("content-type"));
+//      if (data.ok) {
+//        setStatus(data.message || "Регистрация успешна");
+//        await loadPlayerProfile();
+//      } else {
+//        setStatus(data.message || "Ошибка регистрации");
+//      }
+//    } catch (error) {
+//      console.error(error);
+//      setStatus("Ошибка сети при регистрации");
+//    } finally {
+      const rawText = await response.text();
+      console.log("RAW RESPONSE:", rawText);
+      let data;
+      try {
+         data = JSON.parse(rawText);
+        } catch (e) {
+          throw new Error("Ответ n8n не является JSON: " + rawText);
+        }
+        if (data.ok) {
+          setIsRegistered(true);
+          setMessage(data.message || "Регистрация сохранена");
+        } else {
+          setMessage(data.message || "Ошибка регистрации");
+        }
+      } finally {
       setLoading(false);
     }
   }
