@@ -8,8 +8,8 @@ const TOURNAMENT_INFO = {
   prizes: "Кубок, медали, призы от партнеров",
 };
 
-const REGISTER_URL = "https://YOUR-N8N-DOMAIN/webhook/register-player";
-const PROFILE_URL = "https://YOUR-N8N-DOMAIN/webhook/get-player-profile";
+const REGISTER_URL = "https://n8lcltstat.party/webhook-test/register-player";
+const PROFILE_URL = "https://n8lcltstat.party/webhook/get-player-profile";
 
 function withTimeout(ms = 15000) {
   const controller = new AbortController();
